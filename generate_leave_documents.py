@@ -413,6 +413,29 @@ def unique_row_cells(row):
     return uniq
 
 
+def box_cell(cell):
+    """Give a cell a full single-line border on all sides — used for the
+    'Clearance For' value cell, whose template has top/right/bottom
+    explicitly set to no border, leaving the text floating outside any box."""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    borders = tcPr.find(qn("w:tcBorders"))
+    if borders is None:
+        from docx.oxml import OxmlElement
+        borders = OxmlElement("w:tcBorders")
+        tcPr.append(borders)
+    for side in ("top", "left", "bottom", "right"):
+        el = borders.find(qn(f"w:{side}"))
+        if el is None:
+            from docx.oxml import OxmlElement
+            el = OxmlElement(f"w:{side}")
+            borders.append(el)
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "000000")
+
+
 def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
     template = SPONSORS[sponsor_name]["clearance_template"]
     doc = Document(template)
@@ -445,6 +468,8 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
                 if label in CLEARANCE_LABELS and i + 1 < len(uniq):
                     field = CLEARANCE_LABELS[label]
                     set_cell_value(uniq[i + 1], values.get(field, ""))
+                    if field == "clearance_for":
+                        box_cell(uniq[i + 1])
 
     for table in tables[1:]:
         for row in table.rows:
@@ -453,6 +478,7 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
                 label = normalize_header(cell.text).lower()
                 if label == "clearance for" and i + 1 < len(uniq):
                     set_cell_value(uniq[i + 1], values["clearance_for"])
+                    box_cell(uniq[i + 1])
 
     out_docx = workdir / "clearance_form.docx"
     doc.save(out_docx)
