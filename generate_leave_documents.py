@@ -413,10 +413,12 @@ def unique_row_cells(row):
     return uniq
 
 
-def box_cell(cell):
+def box_cell(cell, fill_hex=None, center=False):
     """Give a cell a full single-line border on all sides — used for the
     'Clearance For' value cell, whose template has top/right/bottom
-    explicitly set to no border, leaving the text floating outside any box."""
+    explicitly set to no border, leaving the text floating outside any box.
+    Optionally also apply a background fill so it visually matches its
+    label cell (same box, same shading) instead of label=gray/value=white."""
     tc = cell._tc
     tcPr = tc.get_or_add_tcPr()
     borders = tcPr.find(qn("w:tcBorders"))
@@ -434,6 +436,21 @@ def box_cell(cell):
         el.set(qn("w:sz"), "4")
         el.set(qn("w:space"), "0")
         el.set(qn("w:color"), "000000")
+
+    if fill_hex:
+        from docx.oxml import OxmlElement
+        shd = tcPr.find(qn("w:shd"))
+        if shd is None:
+            shd = OxmlElement("w:shd")
+            tcPr.append(shd)
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), fill_hex)
+
+    if center:
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        for p in cell.paragraphs:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
 
 def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
@@ -469,7 +486,7 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
                     field = CLEARANCE_LABELS[label]
                     set_cell_value(uniq[i + 1], values.get(field, ""))
                     if field == "clearance_for":
-                        box_cell(uniq[i + 1])
+                        box_cell(uniq[i + 1], fill_hex="D9D9D9", center=True)
 
     for table in tables[1:]:
         for row in table.rows:
@@ -478,7 +495,7 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
                 label = normalize_header(cell.text).lower()
                 if label == "clearance for" and i + 1 < len(uniq):
                     set_cell_value(uniq[i + 1], values["clearance_for"])
-                    box_cell(uniq[i + 1])
+                    box_cell(uniq[i + 1], fill_hex="D9D9D9", center=True)
 
     out_docx = workdir / "clearance_form.docx"
     doc.save(out_docx)
