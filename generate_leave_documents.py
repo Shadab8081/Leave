@@ -401,6 +401,33 @@ CLEARANCE_LABELS = {
 }
 
 
+def set_cell_lines(cell, lines):
+    """Set a cell's content to the given lines, one per paragraph — and
+    fully clear any extra leftover paragraphs beyond what's provided.
+    set_cell_value only touches paragraphs[0], which left stale text (an
+    old ID number, etc.) behind in cells that have multiple paragraphs,
+    like the PM name+ID cell. This clears everything first."""
+    paragraphs = cell.paragraphs
+    for i, line in enumerate(lines):
+        p = paragraphs[i] if i < len(paragraphs) else cell.add_paragraph()
+        if p.runs:
+            p.runs[0].text = str(line)
+            for r in p.runs[1:]:
+                r.text = ""
+        else:
+            p.add_run(str(line))
+        for sdt in p._p.iter(qn("w:sdt")):
+            for t in sdt.iter(qn("w:t")):
+                t.text = ""
+    for j in range(len(lines), len(paragraphs)):
+        p = paragraphs[j]
+        for r in p.runs:
+            r.text = ""
+        for sdt in p._p.iter(qn("w:sdt")):
+            for t in sdt.iter(qn("w:t")):
+                t.text = ""
+
+
 def unique_row_cells(row):
     """python-docx repeats the same cell object across a horizontal merge
     (gridSpan) — dedupe by the underlying XML element so we get one entry
@@ -507,7 +534,7 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
     pm_name = emp.get("project_manager_name")
     if pm_name:
         pm_id = emp.get("project_manager_id") or ""
-        pm_text = f"{pm_name}\n{pm_id}" if pm_id else str(pm_name)
+        lines = [str(pm_name)] + ([str(pm_id)] if pm_id else [])
         for table in tables:
             for ri, row in enumerate(table.rows):
                 uniq = unique_row_cells(row)
@@ -516,7 +543,7 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
                         name_uniq = unique_row_cells(table.rows[ri + 1])
                         if (i < len(name_uniq)
                                 and normalize_header(name_uniq[0].text).lower() == "name"):
-                            set_cell_value(name_uniq[i], pm_text)
+                            set_cell_lines(name_uniq[i], lines)
 
     out_docx = workdir / "clearance_form.docx"
     doc.save(out_docx)
