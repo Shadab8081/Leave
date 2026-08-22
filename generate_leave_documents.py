@@ -60,6 +60,8 @@ COLUMN_SYNONYMS = {
     "location":         ["LOCATION"],
     "contract":         ["CONTRACT"],
     "entitlement":      ["ENTITLEMENT"],
+    "project_manager_name": ["PROJECT MANAGER NAME", "PROJECT MANAGER"],
+    "project_manager_id":   ["PROJECT MANAGER ID", "PM ID", "PM EMP ID"],
     "employment_status": ["EMPLOPYEMENT STATUS", "EMPLOYMENT STATUS"],
     "paid_days_leave":  ["PAID DAY LEAVE", "PAID DAYS LEAVE"],
     "unpaid_days_leave": ["UNPAID DAY LEAVE", "UNPAID DAYS LEAVE"],
@@ -346,6 +348,8 @@ def fill_leave_application(emp, sponsor_name, workdir: Path) -> Path:
 
     ws["B46"] = str(emp.get("employee_name") or "")
     ws["B47"] = str(emp.get("position") or "")
+    if emp.get("project_manager_name"):
+        ws["G46"] = str(emp.get("project_manager_name"))
     for cell in ("C45", "H45", "L45", "P45"):
         ws[cell] = dt.datetime.combine(today, dt.time())
 
@@ -496,6 +500,23 @@ def fill_clearance_form(emp, sponsor_name, lt_label, workdir: Path) -> Path:
                 if label == "clearance for" and i + 1 < len(uniq):
                     set_cell_value(uniq[i + 1], values["clearance_for"])
                     box_cell(uniq[i + 1], fill_hex="D9D9D9", center=True)
+
+    # Project Manager — three concurrent projects each have their own PM,
+    # so only override this cell when the input sheet actually specifies
+    # one; otherwise leave the template's existing name in place.
+    pm_name = emp.get("project_manager_name")
+    if pm_name:
+        pm_id = emp.get("project_manager_id") or ""
+        pm_text = f"{pm_name}\n{pm_id}" if pm_id else str(pm_name)
+        for table in tables:
+            for ri, row in enumerate(table.rows):
+                uniq = unique_row_cells(row)
+                for i, cell in enumerate(uniq):
+                    if normalize_header(cell.text).lower() == "dm/pm/rm/am" and ri + 1 < len(table.rows):
+                        name_uniq = unique_row_cells(table.rows[ri + 1])
+                        if (i < len(name_uniq)
+                                and normalize_header(name_uniq[0].text).lower() == "name"):
+                            set_cell_value(name_uniq[i], pm_text)
 
     out_docx = workdir / "clearance_form.docx"
     doc.save(out_docx)
